@@ -4,7 +4,9 @@ import Color from "color";
 import colorSchemes from "../colorSchemes";
 import { transform } from "../util";
 import { MsaViewModel } from "../model";
-
+function timeout() {
+  return new Promise(resolve => requestAnimationFrame(resolve));
+}
 export default function(pluginManager: PluginManager) {
   const React = pluginManager.lib["react"];
   const { useEffect, useRef, useMemo } = React;
@@ -49,61 +51,45 @@ export default function(pluginManager: PluginManager) {
       );
       const ref = useRef<HTMLCanvasElement>(null);
       useEffect(() => {
-        if (!ref.current) {
-          return;
-        }
-
-        const ctx = ref.current.getContext("2d");
-        if (!ctx) {
-          return;
-        }
-
-        ctx.resetTransform();
-        ctx.clearRect(0, 0, blockSize, blockSize);
-        ctx.translate(-offsetX, rowHeight / 2 - offsetY);
-        ctx.textAlign = "center";
-        ctx.font = ctx.font.replace(
-          /\d+px/,
-          `${Math.max(8, rowHeight - 12)}px`,
-        );
-
-        const leaves = hierarchy.leaves();
-        const b = blockSize;
-
-        // slice vertical rows, e.g. tree leaves, avoid negative slice
-        const yStart = Math.max(
-          0,
-          Math.floor((offsetY - rowHeight) / rowHeight),
-        );
-        const yEnd = Math.max(
-          0,
-          Math.ceil((offsetY + b + rowHeight) / rowHeight),
-        );
-
-        // slice horizontal visible letters, avoid negative slice
-        const xStart = Math.max(0, Math.floor(offsetX / colWidth));
-        const xEnd = Math.max(0, Math.ceil((offsetX + b) / colWidth));
-        const visibleLeaves = leaves.slice(yStart, yEnd);
-        visibleLeaves.forEach((node: any) => {
-          const {
-            x: y,
-            data: { name },
-          } = node;
-
-          const str = columns[name]?.slice(xStart, xEnd);
-          for (let i = 0; i < str?.length; i++) {
-            const letter = str[i];
-            const color = colorScheme[letter.toUpperCase()];
-            if (bgColor) {
-              const x = i * colWidth + offsetX - (offsetX % colWidth);
-              ctx.fillStyle = color || "white";
-              ctx.fillRect(x, y - rowHeight, colWidth, rowHeight);
-            }
+        (async () => {
+          if (!ref.current) {
+            return;
           }
-        });
 
-        if (rowHeight >= 10 && colWidth >= rowHeight / 2) {
-          visibleLeaves.forEach((node: any) => {
+          const ctx = ref.current.getContext("2d");
+          if (!ctx) {
+            return;
+          }
+
+          ctx.resetTransform();
+          ctx.clearRect(0, 0, blockSize, blockSize);
+          ctx.translate(-offsetX, rowHeight / 2 - offsetY);
+          ctx.textAlign = "center";
+          ctx.font = ctx.font.replace(
+            /\d+px/,
+            `${Math.max(8, rowHeight - 12)}px`,
+          );
+
+          const leaves = hierarchy.leaves();
+          const b = blockSize;
+
+          // slice vertical rows, e.g. tree leaves, avoid negative slice
+          const yStart = Math.max(
+            0,
+            Math.floor((offsetY - rowHeight) / rowHeight),
+          );
+          const yEnd = Math.max(
+            0,
+            Math.ceil((offsetY + b + rowHeight) / rowHeight),
+          );
+
+          // slice horizontal visible letters, avoid negative slice
+          const xStart = Math.max(0, Math.floor(offsetX / colWidth));
+          const xEnd = Math.max(0, Math.ceil((offsetX + b) / colWidth));
+          const visibleLeaves = leaves.slice(yStart, yEnd);
+          let now = performance.now();
+          for (let i = 0; i < visibleLeaves.length; i++) {
+            const node = visibleLeaves[i] as any;
             const {
               x: y,
               data: { name },
@@ -113,15 +99,45 @@ export default function(pluginManager: PluginManager) {
             for (let i = 0; i < str?.length; i++) {
               const letter = str[i];
               const color = colorScheme[letter.toUpperCase()];
-              const contrast = colorContrast[letter.toUpperCase()] || "black";
-              const x = i * colWidth + offsetX - (offsetX % colWidth);
-
-              //note: -rowHeight/4 matches +rowHeight/4 in tree
-              ctx.fillStyle = bgColor ? contrast : color || "black";
-              ctx.fillText(letter, x + colWidth / 2, y - rowHeight / 4);
+              if (bgColor) {
+                const x = i * colWidth + offsetX - (offsetX % colWidth);
+                ctx.fillStyle = color || "white";
+                ctx.fillRect(x, y - rowHeight, colWidth, rowHeight);
+                if (performance.now() - now > 16) {
+                  await timeout();
+                  now = performance.now();
+                }
+              }
             }
-          });
-        }
+          }
+
+          if (rowHeight >= 10 && colWidth >= rowHeight / 2) {
+            let now = performance.now();
+            for (let i = 0; i < visibleLeaves.length; i++) {
+              const node = visibleLeaves[i] as any;
+              const {
+                x: y,
+                data: { name },
+              } = node;
+
+              const str = columns[name]?.slice(xStart, xEnd);
+              for (let i = 0; i < str?.length; i++) {
+                const letter = str[i];
+                const color = colorScheme[letter.toUpperCase()];
+                const contrast = colorContrast[letter.toUpperCase()] || "black";
+                const x = i * colWidth + offsetX - (offsetX % colWidth);
+
+                //note: -rowHeight/4 matches +rowHeight/4 in tree
+                ctx.fillStyle = bgColor ? contrast : color || "black";
+                ctx.fillText(letter, x + colWidth / 2, y - rowHeight / 4);
+                if (performance.now() - now > 30) {
+                  await timeout();
+                  now = performance.now();
+                }
+              }
+            }
+          }
+        })();
       }, [
         MSA,
         columns,

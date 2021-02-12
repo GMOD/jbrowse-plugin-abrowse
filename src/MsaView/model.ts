@@ -209,7 +209,7 @@ export default function stateModelFactory(pluginManager: PluginManager) {
             rowHeight: 20,
             scrollY: 0,
             scrollX: 0,
-            blockSize: 1000,
+            blockSize: 500,
             colWidth: 16,
             showBranchLen: true,
             bgColor: true,
